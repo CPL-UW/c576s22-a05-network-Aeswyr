@@ -1,6 +1,7 @@
 // using Random = UnityEngine.Random;
 
 using System;
+using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using TMPro;
 using Unity.Collections;
@@ -89,6 +90,7 @@ public class GMScript : NetworkBehaviour
 
     private const string MSG_TYPE_CHUNK = "CHUNK";
     private const string MSG_TYPE_PIECE = "PIECE";
+    private const string MSG_TYPE_ANGRY = "LINE";
 
     private void SendChunkMessage()
     {
@@ -100,6 +102,10 @@ public class GMScript : NetworkBehaviour
         SendMessageToAll(MSG_TYPE_PIECE,v2s(_myPiece));
     }
 
+    private void SendAngryMessage() {
+        SendMessageToAll(MSG_TYPE_ANGRY, "");
+    }
+
     void DoNetworkUpdate()
     {
         if (!_networkStarted) return;
@@ -107,6 +113,7 @@ public class GMScript : NetworkBehaviour
         {
             NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(MSG_TYPE_CHUNK, ReceiveChunkMessage);
             NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(MSG_TYPE_PIECE, ReceivePieceMessage);
+            NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(MSG_TYPE_ANGRY, ReceiveAngryMessage);
             _networkRegistered = true;
             return;
         }
@@ -127,8 +134,30 @@ public class GMScript : NetworkBehaviour
         reader.ReadValueSafe(out var message);
         _enemyChunk = SwitchBounds(s2v(message),_hBounds,_eBounds);
     }
+
+    private void ReceiveAngryMessage(ulong senderID, FastBufferReader reader) {
+        Dirty = true;
+        MakeRandomAngryChunk();
+    }
     
-    
+    Vector3Int RandomEnemyPoint()
+    {
+        return new Vector3Int(UnityEngine.Random.Range(_hBounds.xMin,_hBounds.yMin),UnityEngine.Random.Range(_hBounds.yMin,0));
+    }
+
+    bool AddChunkAtPoint(Vector3Int chunkPoint)
+    {
+        _myChunk ??= new Vector3Int[] {};
+        if (_myChunk.Any(p => p.x == chunkPoint.x && p.y == chunkPoint.y))
+            return false;
+        _myChunk = _myChunk.Concat(new [] {chunkPoint}).ToArray();
+        return true;
+    }
+
+    bool MakeRandomAngryChunk()
+    {
+        return AddChunkAtPoint(RandomEnemyPoint());
+    }
     
     private void Update()
     {
@@ -176,7 +205,11 @@ public class GMScript : NetworkBehaviour
         if (0 != _fixedUpdateCount++ % _fixedUpdateFramesToWait) return;
         
         PlayerMove(0,-1); // tick down
-        _myChunk = UpdateKillBoard(_hBounds, _myChunk);
+        Vector3Int[] newBoard = UpdateKillBoard(_hBounds, _myChunk);
+        if (newBoard != _myChunk) {
+            SendAngryMessage();
+        }
+        _myChunk = newBoard;
         
         // infoText.text = $"PTS:{_score}\t\tMAX:{_difficulty}\nCURRIC 576";
         _fixedUpdateCount = 1;
