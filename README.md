@@ -6,3 +6,6 @@
 4. Hit run?
 
 Apologies for the mess. YMMV.
+
+CHANGES:
+Completing a line uses the AddAngryChunk logic from the adaptibility assignment in order to add a random chunk to the opponent's board.
